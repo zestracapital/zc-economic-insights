@@ -1,0 +1,113 @@
+/* ZC DMT (merged) - Public Styles (theme-friendly, minimal) */
+
+.zc-chart-wrapper {
+  position: relative;
+  margin: 1rem 0;
+}
+
+.zc-chart-container {
+  position: relative;
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid #e2e8f0; /* slate-200 */
+  border-radius: 6px;
+  padding: 8px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* Error and Fallback UI */
+.zc-chart-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  background: #f8f9fa;
+  border: 2px dashed #dee2e6;
+  border-radius: 8px;
+  color: #475569; /* slate-600 */
+  text-align: center;
+  padding: 1.25rem;
+}
+
+.zc-chart-error .error-icon {
+  font-size: 24px;
+  margin-bottom: 6px;
+}
+
+.zc-chart-error .error-message {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.zc-chart-error .error-details {
+  font-size: 12px;
+  color: #64748b; /* slate-500 */
+}
+
+.zc-chart-fallback .zc-chart-notice {
+  background: #fff3cd;
+  color: #856404;
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  border: 1px solid #ffeaa7;
+  font-size: 12px;
+}
+
+/* Dynamic controls */
+.zc-chart-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 8px 0;
+  flex-wrap: wrap;
+}
+
+.zc-chart-controls .timeframe-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.zc-chart-controls .zc-tf-btn {
+  appearance: none;
+  border: 1px solid #cbd5e1; /* slate-300 */
+  background: #ffffff;
+  color: #0f172a; /* slate-900 */
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.zc-chart-controls .zc-tf-btn:hover {
+  background: #f1f5f9; /* slate-100 */
+}
+
+.zc-chart-controls .zc-tf-btn.active {
+  background: #0ea5e9; /* sky-500 */
+  color: #ffffff;
+  border-color: #0ea5e9;
+}
+
+/* Responsive behavior */
+.zc-chart-wrapper canvas,
+.zc-chart-wrapper svg {
+  max-width: 100%;
+  height: auto;
+}
+
+@media (max-width: 768px) {
+  .zc-chart-controls {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .zc-chart-controls .zc-tf-btn {
+    font-size: 11px;
+    padding: 3px 7px;
+  }
+}
