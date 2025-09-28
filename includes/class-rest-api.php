@@ -13,12 +13,15 @@ if (!class_exists('ZC_DMT_Rest_API')) {
         public function register_routes() {
             add_action('rest_api_init', function () {
 
-                // POST /zc-dmt/v1/validate-key
+                // Security headers for all API endpoints
+                add_action('send_headers', array($this, 'add_security_headers'));
+
+                // POST/GET /validate-key - Enhanced security
                 register_rest_route(ZC_DMT_REST_NS, '/validate-key', array(
                     array(
                         'methods'  => array('GET', 'POST'),
                         'callback' => array($this, 'validate_key'),
-                        'permission_callback' => '__return_true',
+                        'permission_callback' => array($this, 'public_permission_callback'),
                         'args' => array(
                             'access_key' => array(
                                 'required' => false,
@@ -30,12 +33,12 @@ if (!class_exists('ZC_DMT_Rest_API')) {
                     ),
                 ));
 
-                // GET /zc-dmt/v1/data/{slug}?access_key=KEY&start=&end=
+                // GET /data/{slug} - Enhanced with security checks
                 register_rest_route(ZC_DMT_REST_NS, '/data/(?P<slug>[\w\-]+)', array(
                     array(
                         'methods'  => 'GET',
                         'callback' => array($this, 'get_data_by_slug'),
-                        'permission_callback' => '__return_true',
+                        'permission_callback' => array($this, 'data_permission_callback'),
                         'args' => array(
                             'slug' => array(
                                 'required' => true,
@@ -44,7 +47,7 @@ if (!class_exists('ZC_DMT_Rest_API')) {
                                 'validate_callback' => array($this, 'validate_slug_format'),
                             ),
                             'access_key' => array(
-                                'required' => true,
+                                'required' => false, // Make optional for internal requests
                                 'type' => 'string',
                                 'sanitize_callback' => 'sanitize_text_field',
                                 'validate_callback' => array($this, 'validate_access_key_format'),
@@ -65,12 +68,12 @@ if (!class_exists('ZC_DMT_Rest_API')) {
                     ),
                 ));
 
-                // GET /zc-dmt/v1/search?q=QUERY&access_key=KEY&limit=20
+                // GET /search - Enhanced security
                 register_rest_route(ZC_DMT_REST_NS, '/search', array(
                     array(
                         'methods'  => 'GET',
                         'callback' => array($this, 'search_indicators'),
-                        'permission_callback' => '__return_true',
+                        'permission_callback' => array($this, 'search_permission_callback'),
                         'args' => array(
                             'q' => array(
                                 'required' => true,
@@ -79,7 +82,7 @@ if (!class_exists('ZC_DMT_Rest_API')) {
                                 'validate_callback' => array($this, 'validate_search_query'),
                             ),
                             'access_key' => array(
-                                'required' => true,
+                                'required' => false,
                                 'type' => 'string',
                                 'sanitize_callback' => 'sanitize_text_field',
                                 'validate_callback' => array($this, 'validate_access_key_format'),
@@ -89,54 +92,42 @@ if (!class_exists('ZC_DMT_Rest_API')) {
                                 'type' => 'integer',
                                 'default' => 20,
                                 'minimum' => 1,
-                                'maximum' => 100,
+                                'maximum' => 50, // Reduced max limit for security
                             ),
                         ),
                     ),
                 ));
 
-                // GET /zc-dmt/v1/indicators?access_key=KEY
+                // GET /indicators - Restricted access
                 register_rest_route(ZC_DMT_REST_NS, '/indicators', array(
                     array(
                         'methods'  => 'GET',
                         'callback' => array($this, 'list_indicators'),
-                        'permission_callback' => '__return_true',
+                        'permission_callback' => array($this, 'admin_permission_callback'),
                         'args' => array(
-                            'access_key' => array(
-                                'required' => true,
-                                'type' => 'string',
-                                'sanitize_callback' => 'sanitize_text_field',
-                                'validate_callback' => array($this, 'validate_access_key_format'),
-                            ),
                             'limit' => array(
                                 'required' => false,
                                 'type' => 'integer',
                                 'default' => 50,
                                 'minimum' => 1,
-                                'maximum' => 200,
+                                'maximum' => 100, // Reduced for security
                             ),
                         ),
                     ),
                 ));
 
-                // GET /zc-dmt/v1/backup/{slug}?access_key=KEY (placeholder for future)
-                register_rest_route(ZC_DMT_REST_NS, '/backup/(?P<slug>[\w\-]+)', array(
+                // Admin-only endpoint for getting full indicator details
+                register_rest_route(ZC_DMT_REST_NS, '/indicators/(?P<id>\\d+)', array(
                     array(
                         'methods'  => 'GET',
-                        'callback' => array($this, 'get_backup_by_slug'),
-                        'permission_callback' => '__return_true',
+                        'callback' => array($this, 'get_indicator_details'),
+                        'permission_callback' => array($this, 'admin_permission_callback'),
                         'args' => array(
-                            'slug' => array(
+                            'id' => array(
                                 'required' => true,
-                                'type' => 'string',
-                                'sanitize_callback' => 'sanitize_title',
-                                'validate_callback' => array($this, 'validate_slug_format'),
-                            ),
-                            'access_key' => array(
-                                'required' => true,
-                                'type' => 'string',
-                                'sanitize_callback' => 'sanitize_text_field',
-                                'validate_callback' => array($this, 'validate_access_key_format'),
+                                'type' => 'integer',
+                                'sanitize_callback' => 'absint',
+                                'validate_callback' => array($this, 'validate_positive_integer'),
                             ),
                         ),
                     ),
@@ -145,172 +136,144 @@ if (!class_exists('ZC_DMT_Rest_API')) {
         }
 
         /**
-         * Validate access key format
+         * Enhanced permission callbacks with security
          */
-        public function validate_access_key_format($param, $request, $key) {
-            if (empty($param)) {
-                return false;
+        public function public_permission_callback($request) {
+            // Basic rate limiting for public endpoints
+            return $this->check_rate_limit('public', 100);
+        }
+
+        public function data_permission_callback($request) {
+            if (!$this->check_rate_limit('data', 150)) {
+                return new WP_Error('rate_limit', 'Rate limit exceeded', array('status' => 429));
             }
-            
-            // Access key should be alphanumeric with dashes/underscores, 16-64 characters
-            if (!preg_match('/^[a-zA-Z0-9_\-]{16,64}$/', $param)) {
-                return false;
+
+            // Check if this is an internal request (from same domain)
+            if ($this->is_internal_request()) {
+                return true;
             }
-            
+
+            // For external requests, check access key requirement
+            $require_key = get_option('zc_dmt_require_api_key', false);
+            $access_key = $request->get_param('access_key');
+
+            if ($require_key && empty($access_key)) {
+                return new WP_Error('access_key_required', 'Access key required for external requests', array('status' => 401));
+            }
+
+            if (!empty($access_key)) {
+                if (!ZC_DMT_Security::validate_key($access_key)) {
+                    return new WP_Error('invalid_access_key', 'Invalid access key', array('status' => 403));
+                }
+            }
+
             return true;
         }
 
+        public function search_permission_callback($request) {
+            if (!$this->check_rate_limit('search', 50)) {
+                return new WP_Error('rate_limit', 'Search rate limit exceeded', array('status' => 429));
+            }
+
+            // More restrictive for search
+            $access_key = $request->get_param('access_key');
+            if (!$this->is_internal_request() && empty($access_key)) {
+                return new WP_Error('access_key_required', 'Access key required for search', array('status' => 401));
+            }
+
+            if (!empty($access_key) && !ZC_DMT_Security::validate_key($access_key)) {
+                return new WP_Error('invalid_access_key', 'Invalid access key', array('status' => 403));
+            }
+
+            return true;
+        }
+
+        public function admin_permission_callback($request) {
+            if (!current_user_can('manage_options')) {
+                return new WP_Error('insufficient_permissions', 'Admin access required', array('status' => 403));
+            }
+
+            return $this->check_rate_limit('admin', 200);
+        }
+
         /**
-         * Validate slug format
+         * Check if request is from internal source
          */
+        private function is_internal_request() {
+            $referer = wp_get_referer();
+            $home_url = home_url();
+            
+            // Check if referer is from same domain
+            if ($referer && strpos($referer, $home_url) === 0) {
+                return true;
+            }
+
+            // Check if request has valid WordPress nonce for internal requests
+            $nonce = $_SERVER['HTTP_X_WP_NONCE'] ?? $_GET['_wpnonce'] ?? $_POST['_wpnonce'] ?? '';
+            if (!empty($nonce) && wp_verify_nonce($nonce, 'wp_rest')) {
+                return true;
+            }
+
+            return false;
+        }
+
+        /**
+         * Enhanced rate limiting
+         */
+        private function check_rate_limit($action, $limit = 100) {
+            return ZC_DMT_Security::check_rate_limit($action, $limit);
+        }
+
+        /**
+         * Validation callbacks
+         */
+        public function validate_access_key_format($param, $request, $key) {
+            if (empty($param)) {
+                return true; // Optional parameter
+            }
+            return preg_match('/^[a-zA-Z0-9_\-]{16,64}$/', $param);
+        }
+
         public function validate_slug_format($param, $request, $key) {
             if (empty($param)) {
                 return false;
             }
-            
-            // Slug should be lowercase alphanumeric with dashes/underscores, max 100 chars
-            if (!preg_match('/^[a-z0-9_\-]{1,100}$/', $param)) {
-                return false;
-            }
-            
-            return true;
+            return preg_match('/^[a-z0-9_\-]{1,100}$/', strtolower($param));
         }
 
-        /**
-         * Validate date format
-         */
         public function validate_date_format($param, $request, $key) {
             if (empty($param)) {
-                return true; // Optional parameter
+                return true;
             }
-            
-            // Accept Y-m-d or Y-m-d H:i:s formats
-            $formats = array('Y-m-d', 'Y-m-d H:i:s');
-            
+            $formats = array('Y-m-d', 'Y-m-d H:i:s', 'c');
             foreach ($formats as $format) {
                 $date = DateTime::createFromFormat($format, $param);
                 if ($date && $date->format($format) === $param) {
                     return true;
                 }
             }
-            
             return false;
         }
 
-        /**
-         * Validate search query
-         */
         public function validate_search_query($param, $request, $key) {
             if (empty($param)) {
                 return false;
             }
-            
-            // Query should be 2-100 characters, no script tags
             if (strlen($param) < 2 || strlen($param) > 100) {
                 return false;
             }
-            
             // Prevent script injection
-            if (preg_match('/<script|javascript:|data:/i', $param)) {
-                return false;
-            }
-            
-            return true;
+            return !preg_match('/<script|javascript:|data:|vbscript:/i', $param);
+        }
+
+        public function validate_positive_integer($param, $request, $key) {
+            return is_numeric($param) && intval($param) > 0;
         }
 
         /**
-         * Enhanced rate limiting and security
-         */
-        private function check_security($access_key) {
-            // Check rate limiting
-            if (!$this->check_rate_limit()) {
-                return new WP_REST_Response(array(
-                    'status' => 'error',
-                    'message' => 'Rate limit exceeded'
-                ), 429);
-            }
-
-            // Validate access key
-            if (!ZC_DMT_Security::validate_key($access_key)) {
-                // Log failed attempt
-                $this->log_failed_access($access_key);
-                
-                return new WP_REST_Response(array(
-                    'status' => 'error',
-                    'message' => 'Invalid or expired access key'
-                ), 403);
-            }
-
-            return true;
-        }
-
-        /**
-         * Rate limiting implementation
-         */
-        private function check_rate_limit() {
-            $ip = $this->get_client_ip();
-            $key = 'zc_dmt_api_rate_' . md5($ip);
-            $requests = get_transient($key) ?: 0;
-            
-            // Allow 200 requests per hour per IP for REST API
-            if ($requests >= 200) {
-                return false;
-            }
-            
-            set_transient($key, $requests + 1, HOUR_IN_SECONDS);
-            return true;
-        }
-
-        /**
-         * Get client IP address
-         */
-        private function get_client_ip() {
-            $ip_headers = array(
-                'HTTP_CF_CONNECTING_IP',
-                'HTTP_X_FORWARDED_FOR',
-                'HTTP_X_FORWARDED',
-                'HTTP_X_CLUSTER_CLIENT_IP',
-                'HTTP_FORWARDED_FOR',
-                'HTTP_FORWARDED',
-                'REMOTE_ADDR'
-            );
-            
-            foreach ($ip_headers as $header) {
-                if (!empty($_SERVER[$header])) {
-                    $ip = trim(explode(',', $_SERVER[$header])[0]);
-                    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
-                        return $ip;
-                    }
-                }
-            }
-            
-            return '127.0.0.1';
-        }
-
-        /**
-         * Log failed access attempts
-         */
-        private function log_failed_access($access_key) {
-            $log_data = array(
-                'ip' => $this->get_client_ip(),
-                'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown',
-                'access_key' => substr($access_key, 0, 8) . '***', // Partial key for security
-                'timestamp' => current_time('c'),
-                'endpoint' => $_SERVER['REQUEST_URI'] ?? 'Unknown'
-            );
-
-            if (class_exists('ZC_DMT_Error_Logger')) {
-                ZC_DMT_Error_Logger::warning('REST API Security', 'Invalid access key attempt', $log_data);
-            } else {
-                error_log('ZC DMT: Invalid access key attempt - ' . wp_json_encode($log_data));
-            }
-        }
-
-        /**
-         * POST /validate-key with enhanced security
+         * API Endpoints with enhanced security
          */
         public function validate_key($request) {
-            // Get access key from various sources
             $key = $this->extract_access_key($request);
             $key = sanitize_text_field($key);
             
@@ -322,161 +285,88 @@ if (!class_exists('ZC_DMT_Rest_API')) {
                 ), 400);
             }
 
-            // Check basic rate limiting first
-            if (!$this->check_rate_limit()) {
-                return new WP_REST_Response(array(
-                    'status' => 'error',
-                    'message' => 'Too many requests',
-                    'valid' => false
-                ), 429);
-            }
-
             $valid = ZC_DMT_Security::validate_key($key);
             
             if (!$valid) {
-                $this->log_failed_access($key);
+                $this->log_security_event('Invalid key validation attempt', array(
+                    'key_preview' => substr($key, 0, 8) . '***'
+                ));
             }
 
             return rest_ensure_response(array(
                 'status' => $valid ? 'success' : 'error',
                 'valid' => (bool) $valid,
-                'message' => $valid ? 'Access key is valid' : 'Invalid access key'
+                'message' => $valid ? 'Valid access key' : 'Invalid access key'
             ));
         }
 
-        /**
-         * Extract access key from request
-         */
-        private function extract_access_key($request) {
-            // Try query parameter first
-            $key = $request->get_param('access_key');
-            
-            if (empty($key)) {
-                // Try JSON body
-                $json = $request->get_json_params();
-                if (is_array($json) && isset($json['access_key'])) {
-                    $key = $json['access_key'];
-                }
-            }
-
-            if (empty($key)) {
-                // Try form body
-                $body = $request->get_body_params();
-                if (is_array($body) && isset($body['access_key'])) {
-                    $key = $body['access_key'];
-                }
-            }
-
-            if (empty($key)) {
-                // Try header
-                $auth_header = $request->get_header('Authorization');
-                if ($auth_header && strpos($auth_header, 'Bearer ') === 0) {
-                    $key = substr($auth_header, 7);
-                }
-            }
-
-            return $key;
-        }
-
-        /**
-         * GET /data/{slug}?access_key=KEY&start=&end= (secured)
-         */
         public function get_data_by_slug($request) {
-            $access_key = sanitize_text_field($request->get_param('access_key'));
-            $security_check = $this->check_security($access_key);
-            
-            if ($security_check !== true) {
-                return $security_check; // Return error response
-            }
-
-            $slug = sanitize_title($request['slug']);
-            $start = $request->get_param('start') ? sanitize_text_field($request->get_param('start')) : null;
-            $end = $request->get_param('end') ? sanitize_text_field($request->get_param('end')) : null;
-
-            // Validate date parameters if provided
-            if ($start && !$this->is_valid_date($start)) {
-                return new WP_REST_Response(array(
-                    'status' => 'error',
-                    'message' => 'Invalid start date format. Use Y-m-d or Y-m-d H:i:s'
-                ), 400);
-            }
-
-            if ($end && !$this->is_valid_date($end)) {
-                return new WP_REST_Response(array(
-                    'status' => 'error',
-                    'message' => 'Invalid end date format. Use Y-m-d or Y-m-d H:i:s'
-                ), 400);
-            }
-
             try {
+                $slug = sanitize_title($request['slug']);
+                $start = $request->get_param('start') ? sanitize_text_field($request->get_param('start')) : null;
+                $end = $request->get_param('end') ? sanitize_text_field($request->get_param('end')) : null;
+
+                // Use secure data fetching method
                 $result = ZC_DMT_Indicators::get_data_by_slug($slug, $start, $end);
                 
                 if (is_wp_error($result)) {
                     return new WP_REST_Response(array(
                         'status' => 'error',
-                        'message' => $result->get_error_message()
+                        'message' => 'Data not available'
                     ), 404);
                 }
 
-                // Sanitize response data
+                // Sanitize and limit response data
                 $sanitized_result = $this->sanitize_indicator_response($result);
 
-                return rest_ensure_response(array(
+                $response = array(
                     'status' => 'success',
                     'data' => $sanitized_result
-                ));
+                );
+
+                // Add security headers
+                $wp_response = rest_ensure_response($response);
+                $wp_response->header('Cache-Control', 'private, max-age=300'); // 5 minutes
+                $wp_response->header('X-Content-Type-Options', 'nosniff');
+                
+                return $wp_response;
 
             } catch (Exception $e) {
                 error_log('ZC DMT REST API Error: ' . $e->getMessage());
                 return new WP_REST_Response(array(
                     'status' => 'error',
-                    'message' => 'Failed to retrieve indicator data'
-                ), 500);
+                    'message' => 'Service temporarily unavailable'
+                ), 503);
             }
         }
 
-        /**
-         * Search indicators securely
-         */
         public function search_indicators($request) {
-            $access_key = sanitize_text_field($request->get_param('access_key'));
-            $security_check = $this->check_security($access_key);
-            
-            if ($security_check !== true) {
-                return $security_check;
-            }
-
-            $query = sanitize_text_field($request->get_param('q'));
-            $limit = min(100, max(1, intval($request->get_param('limit')))) ?: 20;
-
-            if (strlen($query) < 2) {
-                return new WP_REST_Response(array(
-                    'status' => 'error',
-                    'message' => 'Query must be at least 2 characters'
-                ), 400);
-            }
-
             try {
+                $query = sanitize_text_field($request->get_param('q'));
+                $limit = min(50, max(1, intval($request->get_param('limit')))) ?: 20;
+
+                if (strlen($query) < 2) {
+                    return rest_ensure_response(array(
+                        'status' => 'success',
+                        'indicators' => array(),
+                        'total' => 0
+                    ));
+                }
+
                 global $wpdb;
                 $table = $wpdb->prefix . 'zc_dmt_indicators';
                 
                 $indicators = $wpdb->get_results($wpdb->prepare(
-                    "SELECT id, name, slug, description, source_type 
+                    "SELECT id, name, slug, source_type 
                      FROM {$table} 
                      WHERE is_active = 1 
-                     AND (name LIKE %s OR slug LIKE %s OR description LIKE %s)
+                     AND (name LIKE %s OR slug LIKE %s)
                      ORDER BY 
-                         CASE 
-                             WHEN name LIKE %s THEN 1
-                             WHEN slug LIKE %s THEN 2
-                             ELSE 3
-                         END,
+                         CASE WHEN name LIKE %s THEN 1 ELSE 2 END,
                          name ASC 
                      LIMIT %d",
                     '%' . $wpdb->esc_like($query) . '%',
                     '%' . $wpdb->esc_like($query) . '%',
-                    '%' . $wpdb->esc_like($query) . '%',
-                    $wpdb->esc_like($query) . '%',
                     $wpdb->esc_like($query) . '%',
                     $limit
                 ));
@@ -488,15 +378,13 @@ if (!class_exists('ZC_DMT_Rest_API')) {
                         'name' => sanitize_text_field($indicator->name),
                         'slug' => sanitize_title($indicator->slug),
                         'source_type' => sanitize_text_field($indicator->source_type)
-                        // Intentionally exclude description and other sensitive data
                     );
                 }
 
                 return rest_ensure_response(array(
                     'status' => 'success',
                     'indicators' => $formatted,
-                    'total' => count($formatted),
-                    'query' => $query
+                    'total' => count($formatted)
                 ));
 
             } catch (Exception $e) {
@@ -508,27 +396,16 @@ if (!class_exists('ZC_DMT_Rest_API')) {
             }
         }
 
-        /**
-         * List indicators securely
-         */
         public function list_indicators($request) {
-            $access_key = sanitize_text_field($request->get_param('access_key'));
-            $security_check = $this->check_security($access_key);
-            
-            if ($security_check !== true) {
-                return $security_check;
-            }
-
-            $limit = min(200, max(1, intval($request->get_param('limit')))) ?: 50;
-
             try {
+                $limit = min(100, max(1, intval($request->get_param('limit')))) ?: 50;
+
                 global $wpdb;
                 $table = $wpdb->prefix . 'zc_dmt_indicators';
                 
                 $indicators = $wpdb->get_results($wpdb->prepare(
-                    "SELECT id, name, slug, source_type, is_active
+                    "SELECT id, name, slug, source_type, is_active, created_at
                      FROM {$table}
-                     WHERE is_active = 1
                      ORDER BY name ASC
                      LIMIT %d",
                     $limit
@@ -540,8 +417,9 @@ if (!class_exists('ZC_DMT_Rest_API')) {
                         'id' => intval($indicator->id),
                         'name' => sanitize_text_field($indicator->name),
                         'slug' => sanitize_title($indicator->slug),
-                        'source_type' => sanitize_text_field($indicator->source_type)
-                        // Exclude sensitive configuration data
+                        'source_type' => sanitize_text_field($indicator->source_type),
+                        'is_active' => intval($indicator->is_active),
+                        'created_at' => $indicator->created_at
                     );
                 }
 
@@ -560,58 +438,82 @@ if (!class_exists('ZC_DMT_Rest_API')) {
             }
         }
 
-        /**
-         * GET /backup/{slug}?access_key=KEY (secure placeholder)
-         */
-        public function get_backup_by_slug($request) {
-            $access_key = sanitize_text_field($request->get_param('access_key'));
-            $security_check = $this->check_security($access_key);
-            
-            if ($security_check !== true) {
-                return $security_check;
-            }
-
-            $slug = sanitize_title($request['slug']);
-
+        public function get_indicator_details($request) {
             try {
-                // For now, fallback to live data
-                // In future, this will check Google Drive backups first
-                $result = ZC_DMT_Indicators::get_data_by_slug($slug, null, null);
-                
-                if (is_wp_error($result)) {
+                $id = absint($request->get_param('id'));
+
+                global $wpdb;
+                $table = $wpdb->prefix . 'zc_dmt_indicators';
+
+                $indicator = $wpdb->get_row($wpdb->prepare(
+                    "SELECT * FROM {$table} WHERE id = %d",
+                    $id
+                ));
+
+                if (!$indicator) {
                     return new WP_REST_Response(array(
-                        'status' => 'success', // Don't expose 404s for backup endpoint
-                        'data' => array(
-                            'indicator' => array(
-                                'name' => $slug,
-                                'slug' => $slug,
-                            ),
-                            'series' => array(),
-                            'note' => 'No backup data available',
-                        ),
-                    ));
+                        'status' => 'error',
+                        'message' => 'Indicator not found'
+                    ), 404);
                 }
 
-                $sanitized_result = $this->sanitize_indicator_response($result);
+                $formatted = array(
+                    'id' => intval($indicator->id),
+                    'name' => sanitize_text_field($indicator->name),
+                    'slug' => sanitize_title($indicator->slug),
+                    'description' => sanitize_text_field($indicator->description),
+                    'source_type' => sanitize_text_field($indicator->source_type),
+                    'is_active' => intval($indicator->is_active),
+                    'created_at' => $indicator->created_at,
+                    'updated_at' => $indicator->updated_at
+                    // Exclude sensitive source_config for security
+                );
 
                 return rest_ensure_response(array(
                     'status' => 'success',
-                    'data' => $sanitized_result,
-                    'source' => 'live_fallback'
+                    'indicator' => $formatted
                 ));
 
             } catch (Exception $e) {
-                error_log('ZC DMT Backup Error: ' . $e->getMessage());
+                error_log('ZC DMT Get Details Error: ' . $e->getMessage());
                 return new WP_REST_Response(array(
                     'status' => 'error',
-                    'message' => 'Backup service temporarily unavailable'
-                ), 503);
+                    'message' => 'Failed to get indicator details'
+                ), 500);
             }
         }
 
         /**
-         * Sanitize indicator response data
+         * Helper methods
          */
+        private function extract_access_key($request) {
+            // Try multiple sources for access key
+            $key = $request->get_param('access_key');
+            
+            if (empty($key)) {
+                $json = $request->get_json_params();
+                if (is_array($json) && isset($json['access_key'])) {
+                    $key = $json['access_key'];
+                }
+            }
+
+            if (empty($key)) {
+                $body = $request->get_body_params();
+                if (is_array($body) && isset($body['access_key'])) {
+                    $key = $body['access_key'];
+                }
+            }
+
+            if (empty($key)) {
+                $auth_header = $request->get_header('Authorization');
+                if ($auth_header && strpos($auth_header, 'Bearer ') === 0) {
+                    $key = substr($auth_header, 7);
+                }
+            }
+
+            return $key;
+        }
+
         private function sanitize_indicator_response($result) {
             if (!is_array($result)) {
                 return array();
@@ -626,71 +528,64 @@ if (!class_exists('ZC_DMT_Rest_API')) {
                     'name' => sanitize_text_field($indicator['name'] ?? $indicator->name ?? ''),
                     'slug' => sanitize_title($indicator['slug'] ?? $indicator->slug ?? ''),
                     'source_type' => sanitize_text_field($indicator['source_type'] ?? $indicator->source_type ?? '')
-                    // Exclude sensitive fields like source_config, api_keys, etc.
                 ),
                 'series' => array(),
                 'meta' => array(
                     'count' => 0,
-                    'start_date' => null,
-                    'end_date' => null
+                    'generated_at' => current_time('c')
                 )
             );
 
-            // Sanitize series data
+            // Sanitize series data with limits
             if (is_array($series)) {
+                $count = 0;
                 foreach ($series as $point) {
+                    if ($count >= 10000) break; // Limit data points for security
+                    
                     if (is_array($point) && count($point) >= 2) {
                         $date = $point[0];
                         $value = $point[1];
                         
-                        // Validate date and value
                         if (strtotime($date) !== false && is_numeric($value)) {
-                            $sanitized_point = array(
+                            $sanitized['series'][] = array(
                                 gmdate('Y-m-d', strtotime($date)),
                                 round(floatval($value), 6)
                             );
-                            $sanitized['series'][] = $sanitized_point;
+                            $count++;
                         }
                     }
                 }
             }
 
-            // Update meta information
             $sanitized['meta']['count'] = count($sanitized['series']);
-            if (!empty($sanitized['series'])) {
-                $sanitized['meta']['start_date'] = $sanitized['series'][0][0];
-                $sanitized['meta']['end_date'] = end($sanitized['series'])[0];
-            }
-
             return $sanitized;
         }
 
-        /**
-         * Validate date format
-         */
-        private function is_valid_date($date) {
-            $formats = array('Y-m-d', 'Y-m-d H:i:s', 'c');
-            
-            foreach ($formats as $format) {
-                $parsed = DateTime::createFromFormat($format, $date);
-                if ($parsed && $parsed->format($format) === $date) {
-                    return true;
-                }
-            }
-            
-            return false;
+        private function log_security_event($event, $details = array()) {
+            $log_data = array_merge($details, array(
+                'ip' => ZC_DMT_Security::get_client_ip(),
+                'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown',
+                'timestamp' => current_time('c'),
+                'endpoint' => $_SERVER['REQUEST_URI'] ?? 'Unknown'
+            ));
+
+            ZC_DMT_Security::log_security_event($event, $log_data);
         }
 
         /**
-         * Add security headers
+         * Add comprehensive security headers
          */
         public function add_security_headers() {
-            add_action('rest_api_init', function() {
+            if (strpos($_SERVER['REQUEST_URI'] ?? '', '/wp-json/zc-dmt/') !== false) {
                 header('X-Content-Type-Options: nosniff');
                 header('X-Frame-Options: DENY');
                 header('X-XSS-Protection: 1; mode=block');
                 header('Referrer-Policy: strict-origin-when-cross-origin');
-            });
+                header('X-Robots-Tag: noindex, nofollow'); // Prevent search engine indexing
+                header('Cache-Control: private, no-cache, no-store, must-revalidate');
+                header('Pragma: no-cache');
+                header('Expires: 0');
+            }
         }
     }
 }
