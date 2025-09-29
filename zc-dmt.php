@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name: Zestra Capital - Economic Insights DMT & Charts
+ * Plugin Name: Zestra Capital - Economic Insights DMT & Charts (Secure)
  * Plugin URI: https://client.zestracapital.com
- * Description: Unified data management and chart rendering plugin with improved UI, API keys, REST, nonce-protected AJAX, and comprehensive data source management. FIXED for correct class names.
- * Version: 0.2.2
+ * Description: Secure unified data management and chart rendering plugin with enhanced security, secure dashboard UI, and comprehensive data protection.
+ * Version: 0.3.0
  * Author: Zestra Capital
  * Text Domain: zc-dmt
  * Requires at least: 5.0
@@ -32,44 +32,51 @@ if (!class_exists('ZC_DMT_Plugin')) {
         }
         
         private function define_constants() {
-            if (!defined('ZC_DMT_VERSION')) define('ZC_DMT_VERSION', '0.2.2');
+            if (!defined('ZC_DMT_VERSION')) define('ZC_DMT_VERSION', '0.3.0');
             if (!defined('ZC_DMT_FILE')) define('ZC_DMT_FILE', __FILE__);
             if (!defined('ZC_DMT_BASENAME')) define('ZC_DMT_BASENAME', plugin_basename(__FILE__));
             if (!defined('ZC_DMT_DIR')) define('ZC_DMT_DIR', plugin_dir_path(__FILE__));
             if (!defined('ZC_DMT_URL')) define('ZC_DMT_URL', plugin_dir_url(__FILE__));
             
-            // Avoid already defined warnings if another plugin defined it first
+            // REST API namespace
             if (!defined('ZC_DMT_REST_NS')) define('ZC_DMT_REST_NS', 'zc-dmt/v1');
         }
         
         private function includes() {
-            // Core includes - FIXED for correct class names
+            // Core security components (load first)
             require_once ZC_DMT_DIR . 'includes/class-database.php';
             require_once ZC_DMT_DIR . 'includes/class-security.php';
+            
+            // Secure AJAX handler (NEW - replaces old handlers)
+            require_once ZC_DMT_DIR . 'includes/class-secure-ajax-handler.php';
+            
+            // Core functionality
             require_once ZC_DMT_DIR . 'includes/class-indicators.php';
             require_once ZC_DMT_DIR . 'includes/class-rest-api.php';
             
             // Calculations system
             require_once ZC_DMT_DIR . 'includes/class-calculations.php';
-            require_once ZC_DMT_DIR . 'includes/calculations/class-formula-parser.php';
+            if (file_exists(ZC_DMT_DIR . 'includes/calculations/class-formula-parser.php')) {
+                require_once ZC_DMT_DIR . 'includes/calculations/class-formula-parser.php';
+            }
             
-            // All 15 data sources - FIXED for correct class names with underscores
+            // Data sources (all 15 sources)
             $data_source_files = [
-                'class-google-sheets.php',      // ZC_DMT_DataSource_Google_Sheets
-                'class-fred.php',               // ZC_DMT_DataSource_FRED
-                'class-world-bank.php',         // ZC_DMT_DataSource_WorldBank
-                'class-dbnomics.php',           // ZC_DMT_DataSource_DBnomics
-                'class-oecd.php',               // ZC_DMT_DataSource_OECD
-                'class-yahoo-finance.php',      // ZC_DMT_DataSource_YahooFinance
-                'class-google-finance.php',     // ZC_DMT_DataSource_GoogleFinance
-                'class-uk-ons.php',             // ZC_DMT_DataSource_UK_ONS
-                'class-ecb.php',                // ZC_DMT_DataSource_ECB
-                'class-quandl.php',             // ZC_DMT_DataSource_Quandl
-                'class-bank-of-canada.php',    // ZC_DMT_DataSource_BankOfCanada
-                'class-statcan.php',            // ZC_DMT_DataSource_StatCan
-                'class-australia-rba.php',     // ZC_DMT_DataSource_Australia_RBA
-                'class-universal-csv.php',     // ZC_DMT_DataSource_Universal_CSV
-                'class-universal-json.php'     // ZC_DMT_DataSource_Universal_JSON
+                'class-google-sheets.php',
+                'class-fred.php',
+                'class-world-bank.php',
+                'class-dbnomics.php',
+                'class-oecd.php',
+                'class-yahoo-finance.php',
+                'class-google-finance.php',
+                'class-uk-ons.php',
+                'class-ecb.php',
+                'class-quandl.php',
+                'class-bank-of-canada.php',
+                'class-statcan.php',
+                'class-australia-rba.php',
+                'class-universal-csv.php',
+                'class-universal-json.php'
             ];
             
             foreach ($data_source_files as $file) {
@@ -79,21 +86,24 @@ if (!class_exists('ZC_DMT_Plugin')) {
                 }
             }
             
-            // Charts functionality merged into DMT
-            require_once ZC_DMT_DIR . 'includes/class-shortcodes.php';
+            // Legacy charts functionality (fallback)
+            if (file_exists(ZC_DMT_DIR . 'includes/class-shortcodes.php')) {
+                require_once ZC_DMT_DIR . 'includes/class-shortcodes.php';
+            }
             
-            // Enhanced shortcodes for new dashboard
+            // NEW: Enhanced secure shortcodes (primary)
             require_once ZC_DMT_DIR . 'includes/class-enhanced-shortcodes.php';
             
-            // Dashboard AJAX endpoints
-            require_once ZC_DMT_DIR . 'includes/class-dashboard-ajax.php';
+            // Legacy dashboard AJAX (keeping for backward compatibility)
+            if (file_exists(ZC_DMT_DIR . 'includes/class-dashboard-ajax.php')) {
+                require_once ZC_DMT_DIR . 'includes/class-dashboard-ajax.php';
+            }
             
-            // AJAX handlers (secure, nonce-based) - FIXED class names
+            // Legacy AJAX handlers (keeping for compatibility)
             if (file_exists(ZC_DMT_DIR . 'includes/class-ajax.php')) {
                 require_once ZC_DMT_DIR . 'includes/class-ajax.php';
             }
             
-            // Enhanced AJAX for indicators - FIXED class names
             if (file_exists(ZC_DMT_DIR . 'includes/indicators-ajax.php')) {
                 require_once ZC_DMT_DIR . 'includes/indicators-ajax.php';
             }
@@ -101,10 +111,19 @@ if (!class_exists('ZC_DMT_Plugin')) {
             // Admin interface
             if (is_admin()) {
                 require_once ZC_DMT_DIR . 'admin/settings.php';
-                require_once ZC_DMT_DIR . 'admin/indicators.php'; // Updated version
-                require_once ZC_DMT_DIR . 'admin/data-sources.php'; // New data sources page
-                require_once ZC_DMT_DIR . 'admin/charts-builder-simple.php'; // Simple charts builder page
-                require_once ZC_DMT_DIR . 'admin/calculations-simple.php'; // Simple calculations templates page
+                require_once ZC_DMT_DIR . 'admin/indicators.php';
+                
+                if (file_exists(ZC_DMT_DIR . 'admin/data-sources.php')) {
+                    require_once ZC_DMT_DIR . 'admin/data-sources.php';
+                }
+                
+                if (file_exists(ZC_DMT_DIR . 'admin/charts-builder-simple.php')) {
+                    require_once ZC_DMT_DIR . 'admin/charts-builder-simple.php';
+                }
+                
+                if (file_exists(ZC_DMT_DIR . 'admin/calculations-simple.php')) {
+                    require_once ZC_DMT_DIR . 'admin/calculations-simple.php';
+                }
             }
         }
         
@@ -114,25 +133,29 @@ if (!class_exists('ZC_DMT_Plugin')) {
             
             add_action('init', array($this, 'load_textdomain'));
             
-            // Register enhanced shortcodes (NEW - priority)
+            // Register secure shortcodes (NEW - highest priority)
             add_action('init', function() {
                 if (class_exists('ZC_DMT_Enhanced_Shortcodes')) {
                     ZC_DMT_Enhanced_Shortcodes::register();
                 }
             }, 5);
             
-            // Register original shortcodes (fallback) - FIXED class names
+            // Register legacy shortcodes (fallback)
             add_action('init', function() {
                 if (class_exists('ZC_DMT_Shortcodes')) {
                     ZC_DMT_Shortcodes::register();
                 }
             }, 10);
             
-            // Frontend assets for charts
+            // Frontend assets for secure charts
             add_action('wp_enqueue_scripts', array($this, 'enqueue_public_assets'));
             
             // Boot core subsystems
             add_action('plugins_loaded', array($this, 'boot_services'));
+            
+            // Security cleanup
+            add_action('wp_logout', array($this, 'cleanup_user_data'));
+            add_action('wp_login', array($this, 'cleanup_expired_data'));
         }
         
         public function load_textdomain() {
@@ -140,31 +163,107 @@ if (!class_exists('ZC_DMT_Plugin')) {
         }
         
         public function on_activate() {
-            // Create/upgrade DB schema - FIXED class names
+            // Create/upgrade DB schema
             if (class_exists('ZC_DMT_Database')) {
                 ZC_DMT_Database::install();
             }
             
-            // Flush rewrite rules for REST routes if needed
+            // Set secure defaults
+            $this->set_secure_defaults();
+            
+            // Flush rewrite rules
             if (function_exists('flush_rewrite_rules')) {
                 flush_rewrite_rules();
             }
         }
         
         public function on_deactivate() {
-            // Keep data by default, do not drop tables
+            // Clean up transients and temporary data
+            $this->cleanup_plugin_data();
+            
             if (function_exists('flush_rewrite_rules')) {
                 flush_rewrite_rules();
             }
         }
         
+        /**
+         * Set secure defaults on activation
+         */
+        private function set_secure_defaults() {
+            // Security settings
+            if (get_option('zc_dmt_security_mode') === false) {
+                update_option('zc_dmt_security_mode', 'strict');
+            }
+            
+            if (get_option('zc_dmt_require_key_shortcodes') === false) {
+                update_option('zc_dmt_require_key_shortcodes', false); // Start with false for easy setup
+            }
+            
+            if (get_option('zc_dmt_enable_comparison') === false) {
+                update_option('zc_dmt_enable_comparison', false); // Disabled by default for security
+            }
+            
+            if (get_option('zc_dmt_enable_fullscreen') === false) {
+                update_option('zc_dmt_enable_fullscreen', false); // Disabled by default for security
+            }
+            
+            // Dashboard preferences
+            if (get_option('zc_dmt_default_theme') === false) {
+                update_option('zc_dmt_default_theme', 'light');
+            }
+            
+            if (get_option('zc_dmt_default_chart_height') === false) {
+                update_option('zc_dmt_default_chart_height', 600);
+            }
+        }
+        
+        /**
+         * Cleanup plugin data on deactivation
+         */
+        private function cleanup_plugin_data() {
+            global $wpdb;
+            
+            // Clean up transients
+            $wpdb->query(
+                "DELETE FROM {$wpdb->options} 
+                 WHERE option_name LIKE '_transient_zc_dmt_%' 
+                 OR option_name LIKE '_transient_timeout_zc_dmt_%'"
+            );
+        }
+        
+        /**
+         * Cleanup user-specific data on logout
+         */
+        public function cleanup_user_data() {
+            $user_id = get_current_user_id();
+            if ($user_id) {
+                // Clean user-specific transients
+                delete_transient('zc_dmt_user_cache_' . $user_id);
+            }
+        }
+        
+        /**
+         * Cleanup expired data on login
+         */
+        public function cleanup_expired_data() {
+            // Schedule cleanup if not already scheduled
+            if (!wp_next_scheduled('zc_dmt_cleanup_expired')) {
+                wp_schedule_event(time(), 'hourly', 'zc_dmt_cleanup_expired');
+            }
+        }
+        
         public function boot_services() {
-            // Initialize REST API routes - FIXED class names
+            // Initialize secure AJAX handler first (NEW)
+            if (class_exists('ZC_DMT_Secure_Ajax_Handler')) {
+                ZC_DMT_Secure_Ajax_Handler::init();
+            }
+            
+            // Initialize REST API routes
             if (class_exists('ZC_DMT_Rest_API')) {
                 (new ZC_DMT_Rest_API())->register_routes();
             }
             
-            // Register AJAX endpoints - FIXED class names
+            // Register legacy AJAX endpoints (for backward compatibility)
             if (class_exists('ZC_DMT_Ajax')) {
                 ZC_DMT_Ajax::register();
             }
@@ -174,7 +273,7 @@ if (!class_exists('ZC_DMT_Plugin')) {
                 ZC_DMT_Enhanced_Shortcodes::register();
             }
             
-            // Register dashboard AJAX endpoints
+            // Register legacy dashboard AJAX endpoints (for compatibility)
             if (class_exists('ZC_DMT_Dashboard_Ajax')) {
                 ZC_DMT_Dashboard_Ajax::register();
             }
@@ -198,72 +297,84 @@ if (!class_exists('ZC_DMT_Plugin')) {
                 56
             );
             
-            // Data Sources (new primary page)
-            add_submenu_page(
-                'zc-dmt-dashboard',
-                __('Data Sources', 'zc-dmt'),
-                __('Data Sources', 'zc-dmt'),
-                'manage_options',
-                'zc-dmt-data-sources',
-                'zc_dmt_render_data_sources_page'
-            );
+            // Data Sources
+            if (function_exists('zc_dmt_render_data_sources_page')) {
+                add_submenu_page(
+                    'zc-dmt-dashboard',
+                    __('Data Sources', 'zc-dmt'),
+                    __('Data Sources', 'zc-dmt'),
+                    'manage_options',
+                    'zc-dmt-data-sources',
+                    'zc_dmt_render_data_sources_page'
+                );
+            }
             
-            // Individual Source Forms (hidden submenu for router)
-            add_submenu_page(
-                null, // Hidden from menu
-                __('Configure Data Source', 'zc-dmt'),
-                __('Configure Source', 'zc-dmt'),
-                'manage_options',
-                'zc-dmt-sources-forms',
-                'zc_dmt_render_sources_forms_page'
-            );
+            // Individual Source Forms (hidden)
+            if (function_exists('zc_dmt_render_sources_forms_page')) {
+                add_submenu_page(
+                    null,
+                    __('Configure Data Source', 'zc-dmt'),
+                    __('Configure Source', 'zc-dmt'),
+                    'manage_options',
+                    'zc-dmt-sources-forms',
+                    'zc_dmt_render_sources_forms_page'
+                );
+            }
             
-            // Indicators (improved)
-            add_submenu_page(
-                'zc-dmt-dashboard',
-                __('Indicators', 'zc-dmt'),
-                __('Indicators', 'zc-dmt'),
-                'manage_options',
-                'zc-dmt-indicators',
-                'zc_dmt_render_indicators_page'
-            );
+            // Indicators
+            if (function_exists('zc_dmt_render_indicators_page')) {
+                add_submenu_page(
+                    'zc-dmt-dashboard',
+                    __('Indicators', 'zc-dmt'),
+                    __('Indicators', 'zc-dmt'),
+                    'manage_options',
+                    'zc-dmt-indicators',
+                    'zc_dmt_render_indicators_page'
+                );
+            }
             
-            // Settings (includes API Keys and Charts settings)
-            add_submenu_page(
-                'zc-dmt-dashboard',
-                __('Settings', 'zc-dmt'),
-                __('Settings', 'zc-dmt'),
-                'manage_options',
-                'zc-dmt-settings',
-                'zc_dmt_render_settings_page'
-            );
+            // Settings
+            if (function_exists('zc_dmt_render_settings_page')) {
+                add_submenu_page(
+                    'zc-dmt-dashboard',
+                    __('Settings', 'zc-dmt'),
+                    __('Settings', 'zc-dmt'),
+                    'manage_options',
+                    'zc-dmt-settings',
+                    'zc_dmt_render_settings_page'
+                );
+            }
             
-            // NEW: Charts submenu page (Shortcode Builder)
-            add_submenu_page(
-                'zc-dmt-dashboard',
-                __('Charts Builder', 'zc-dmt'),
-                __('Charts Builder', 'zc-dmt'),
-                'manage_options',
-                'zc-dmt-charts',
-                'zc_dmt_render_charts_builder_page' // Actual charts builder function
-            );
-
-            // NEW: Calculations submenu page (Formula Builder)
-            add_submenu_page(
-                'zc-dmt-dashboard',
-                __('Calculations', 'zc-dmt'),
-                __('Calculations', 'zc-dmt'),
-                'manage_options',
-                'zc-dmt-calculations',
-                'zc_dmt_render_calculations_simple_page' // Simple calculations page function
-            );
+            // Charts Builder
+            if (function_exists('zc_dmt_render_charts_builder_page')) {
+                add_submenu_page(
+                    'zc-dmt-dashboard',
+                    __('Charts Builder', 'zc-dmt'),
+                    __('Charts Builder', 'zc-dmt'),
+                    'manage_options',
+                    'zc-dmt-charts',
+                    'zc_dmt_render_charts_builder_page'
+                );
+            }
             
-            // Remove the duplicate dashboard submenu that WordPress auto-creates
+            // Calculations
+            if (function_exists('zc_dmt_render_calculations_simple_page')) {
+                add_submenu_page(
+                    'zc-dmt-dashboard',
+                    __('Calculations', 'zc-dmt'),
+                    __('Calculations', 'zc-dmt'),
+                    'manage_options',
+                    'zc-dmt-calculations',
+                    'zc_dmt_render_calculations_simple_page'
+                );
+            }
+            
+            // Remove duplicate dashboard submenu
             remove_submenu_page('zc-dmt-dashboard', 'zc-dmt-dashboard');
         }
         
         public function enqueue_admin_assets($hook) {
-            // Load minimal admin styles for DMT pages
+            // Load admin assets for DMT pages
             if (strpos($hook, 'zc-dmt') !== false) {
                 wp_enqueue_style(
                     'zc-dmt-admin',
@@ -280,44 +391,60 @@ if (!class_exists('ZC_DMT_Plugin')) {
                     true
                 );
                 
-                // Provide AJAX config used by admin tools
+                // Secure admin configuration
                 $admin_config = array(
                     'ajaxUrl' => admin_url('admin-ajax.php'),
-                    'nonce' => wp_create_nonce('zc_dmt_chart'),
+                    'nonce' => wp_create_nonce('zc_dmt_admin_' . get_current_user_id()),
                     'indicatorsNonce' => wp_create_nonce('zc_dmt_indicators_action'),
                     'restUrl' => rest_url(ZC_DMT_REST_NS . '/'),
+                    'version' => ZC_DMT_VERSION,
                     'strings' => array(
-                        'confirmDelete' => __('Are you sure you want to delete this indicator? This action cannot be undone.', 'zc-dmt'),
+                        'confirmDelete' => __('Are you sure you want to delete this item? This action cannot be undone.', 'zc-dmt'),
                         'selectIndicator' => __('Please select an indicator first.', 'zc-dmt'),
                         'testSuccess' => __('✓ Data loaded successfully', 'zc-dmt'),
                         'testError' => __('✗ Failed to load data', 'zc-dmt'),
                         'copied' => __('Copied to clipboard!', 'zc-dmt'),
-                        'copyFailed' => __('Failed to copy', 'zc-dmt')
+                        'copyFailed' => __('Failed to copy', 'zc-dmt'),
+                        'securityError' => __('Security validation failed', 'zc-dmt'),
+                        'rateLimitError' => __('Too many requests. Please wait.', 'zc-dmt')
+                    ),
+                    'security' => array(
+                        'mode' => get_option('zc_dmt_security_mode', 'strict'),
+                        'requireKeys' => get_option('zc_dmt_require_key_shortcodes', false)
                     )
                 );
                 
                 wp_localize_script('zc-dmt-admin', 'zcDmtAdmin', $admin_config);
             }
-            
-            // Charts UI assets (for shortcode builder) will be enqueued in admin/charts-builder.php
-            // or a dedicated function for that page.
         }
         
         public function enqueue_public_assets() {
-            // Public CSS for charts
-            $public_css = ZC_DMT_URL . 'assets/css/public.css';
-            if (file_exists(ZC_DMT_DIR . 'assets/css/public.css')) {
-                wp_enqueue_style('zc-dmt-public', $public_css, array(), ZC_DMT_VERSION);
+            // Public CSS for secure charts
+            $public_css_path = ZC_DMT_DIR . 'assets/css/public.css';
+            if (file_exists($public_css_path)) {
+                wp_enqueue_style(
+                    'zc-dmt-public', 
+                    ZC_DMT_URL . 'assets/css/public.css', 
+                    array(), 
+                    filemtime($public_css_path)
+                );
             }
             
-            // Chart loader (nonce-protected AJAX, no API key exposed)
-            $loader_js = ZC_DMT_URL . 'assets/js/chart-loader.js';
-            if (file_exists(ZC_DMT_DIR . 'assets/js/chart-loader.js')) {
-                wp_register_script('zc-dmt-charts', $loader_js, array(), ZC_DMT_VERSION, true);
+            // Legacy chart loader (for backward compatibility)
+            $loader_js_path = ZC_DMT_DIR . 'assets/js/chart-loader.js';
+            if (file_exists($loader_js_path)) {
+                wp_register_script(
+                    'zc-dmt-charts', 
+                    ZC_DMT_URL . 'assets/js/chart-loader.js', 
+                    array(), 
+                    filemtime($loader_js_path), 
+                    true
+                );
                 
                 $config = array(
                     'ajaxUrl' => admin_url('admin-ajax.php'),
                     'nonce' => wp_create_nonce('zc_dmt_chart'),
+                    'version' => ZC_DMT_VERSION,
                     'defaults' => array(
                         'library' => get_option('zc_charts_default_library', 'chartjs'),
                         'timeframe' => get_option('zc_charts_default_timeframe', '1y'),
@@ -328,30 +455,43 @@ if (!class_exists('ZC_DMT_Plugin')) {
                 );
                 
                 wp_localize_script('zc-dmt-charts', 'zcDmtChartsConfig', $config);
-                wp_enqueue_script('zc-dmt-charts');
             }
-
-            // Frontend Charts UI assets (for shortcodes) will be handled by class-shortcodes.php
-            // or a dedicated function that checks for shortcode presence.
         }
         
         public function render_dashboard_page() {
             if (!current_user_can('manage_options')) return;
             
-            // Get basic statistics - FIXED class names and table names
+            // Get statistics
             global $wpdb;
             $indicators_table = $wpdb->prefix . 'zc_dmt_indicators';
-            $datapoints_table = $wpdb->prefix . 'zc_dmt_data_points'; // Assuming this table exists
+            $datapoints_table = $wpdb->prefix . 'zc_dmt_data_points';
             
-            $total_indicators = $wpdb->get_var("SELECT COUNT(*) FROM {$indicators_table}");
-            $active_indicators = $wpdb->get_var("SELECT COUNT(*) FROM {$indicators_table} WHERE is_active = 1");
-            $total_datapoints = $wpdb->get_var("SELECT COUNT(*) FROM {$datapoints_table}"); // Will be 0 if table doesn't exist
-            $recent_indicators = $wpdb->get_results("SELECT name, slug, source_type FROM {$indicators_table} ORDER BY created_at DESC LIMIT 5");
+            $total_indicators = $wpdb->get_var("SELECT COUNT(*) FROM {$indicators_table}") ?: 0;
+            $active_indicators = $wpdb->get_var("SELECT COUNT(*) FROM {$indicators_table} WHERE is_active = 1") ?: 0;
+            $total_datapoints = $wpdb->get_var("SELECT COUNT(*) FROM {$datapoints_table}") ?: 0;
+            $recent_indicators = $wpdb->get_results("SELECT name, slug, source_type FROM {$indicators_table} ORDER BY created_at DESC LIMIT 5") ?: array();
+            
+            // Get security statistics
+            $security_stats = array();
+            if (class_exists('ZC_DMT_Secure_Ajax_Handler')) {
+                $security_stats = ZC_DMT_Secure_Ajax_Handler::get_security_stats();
+            }
             
             ?>
             <div class="wrap zc-dmt-dashboard">
                 <h1><?php echo esc_html__('ZC DMT Dashboard', 'zc-dmt'); ?></h1>
-                <p><?php echo esc_html__('Economic Data Management & Charts - Unified Plugin', 'zc-dmt'); ?></p>
+                <p><?php echo esc_html__('Secure Economic Data Management & Charts Platform', 'zc-dmt'); ?></p>
+                
+                <!-- Security Status -->
+                <div class="notice notice-info">
+                    <p>
+                        <strong><?php echo esc_html__('Security Status:', 'zc-dmt'); ?></strong>
+                        <span style="color: #00a32a; font-weight: 600;">
+                            <?php echo esc_html__('Secure Dashboard Active', 'zc-dmt'); ?>
+                        </span>
+                        - <?php echo esc_html__('Enhanced protection against data exposure and unauthorized access', 'zc-dmt'); ?>
+                    </p>
+                </div>
                 
                 <!-- Statistics Cards -->
                 <div class="zc-stats-grid">
@@ -367,6 +507,12 @@ if (!class_exists('ZC_DMT_Plugin')) {
                         <div class="zc-stat-number"><?php echo esc_html(number_format($total_datapoints)); ?></div>
                         <div class="zc-stat-label"><?php echo esc_html__('Data Points', 'zc-dmt'); ?></div>
                     </div>
+                    <?php if (!empty($security_stats)): ?>
+                    <div class="zc-stat-card">
+                        <div class="zc-stat-number"><?php echo esc_html($security_stats['total_events'] ?? 0); ?></div>
+                        <div class="zc-stat-label"><?php echo esc_html__('Security Events', 'zc-dmt'); ?></div>
+                    </div>
+                    <?php endif; ?>
                 </div>
                 
                 <!-- Quick Actions -->
@@ -382,17 +528,13 @@ if (!class_exists('ZC_DMT_Plugin')) {
                                 <span class="dashicons dashicons-chart-line"></span>
                                 <?php echo esc_html__('Manage Indicators', 'zc-dmt'); ?>
                             </a>
-                            <a href="<?php echo esc_url(admin_url('admin.php?page=zc-dmt-settings')); ?>" class="button button-secondary button-large">
-                                <span class="dashicons dashicons-admin-settings"></span>
-                                <?php echo esc_html__('Settings', 'zc-dmt'); ?>
-                            </a>
                             <a href="<?php echo esc_url(admin_url('admin.php?page=zc-dmt-charts')); ?>" class="button button-secondary button-large">
                                 <span class="dashicons dashicons-chart-bar"></span>
-                                <?php echo esc_html__('Charts UI Builder', 'zc-dmt'); ?>
+                                <?php echo esc_html__('Secure Charts Builder', 'zc-dmt'); ?>
                             </a>
-                            <a href="<?php echo esc_url(admin_url('admin.php?page=zc-dmt-calculations')); ?>" class="button button-secondary button-large">
-                                <span class="dashicons dashicons-calculator"></span>
-                                <?php echo esc_html__('Formula Builder', 'zc-dmt'); ?>
+                            <a href="<?php echo esc_url(admin_url('admin.php?page=zc-dmt-settings')); ?>" class="button button-secondary button-large">
+                                <span class="dashicons dashicons-admin-settings"></span>
+                                <?php echo esc_html__('Security Settings', 'zc-dmt'); ?>
                             </a>
                         </div>
                     </div>
@@ -425,33 +567,31 @@ if (!class_exists('ZC_DMT_Plugin')) {
                     </div>
                 </div>
                 
-                <!-- Data Sources Available -->
+                <!-- Security Features -->
                 <div class="zc-card">
-                    <h2><?php echo esc_html__('Available Data Sources', 'zc-dmt'); ?></h2>
-                    <p><?php echo esc_html__('The plugin supports 15 different economic data sources:', 'zc-dmt'); ?></p>
-                    <div class="zc-sources-summary">
-                        <div class="zc-source-group">
-                            <strong><?php echo esc_html__('Government & Central Banks:', 'zc-dmt'); ?></strong>
-                            <span>FRED, World Bank, ECB, UK ONS, Bank of Canada, Statistics Canada, RBA</span>
+                    <h2><?php echo esc_html__('Security Features', 'zc-dmt'); ?></h2>
+                    <div class="zc-security-features">
+                        <div class="zc-feature">
+                            <span class="dashicons dashicons-shield-alt" style="color: #00a32a;"></span>
+                            <strong><?php echo esc_html__('Secure Dashboard:', 'zc-dmt'); ?></strong>
+                            <span><?php echo esc_html__('Data is not exposed in browser developer tools', 'zc-dmt'); ?></span>
                         </div>
-                        <div class="zc-source-group">
-                            <strong><?php echo esc_html__('Financial Markets:', 'zc-dmt'); ?></strong>
-                            <span>Yahoo Finance, Google Finance, Nasdaq Data Link (Quandl)</span>
+                        <div class="zc-feature">
+                            <span class="dashicons dashicons-lock" style="color: #00a32a;"></span>
+                            <strong><?php echo esc_html__('AJAX Protection:', 'zc-dmt'); ?></strong>
+                            <span><?php echo esc_html__('Rate limiting, nonce validation, and signature verification', 'zc-dmt'); ?></span>
                         </div>
-                        <div class="zc-source-group">
-                            <strong><?php echo esc_html__('International Organizations:', 'zc-dmt'); ?></strong>
-                            <span>OECD, DBnomics</span>
+                        <div class="zc-feature">
+                            <span class="dashicons dashicons-privacy" style="color: #00a32a;"></span>
+                            <strong><?php echo esc_html__('Data Sanitization:', 'zc-dmt'); ?></strong>
+                            <span><?php echo esc_html__('All data is sanitized and validated before display', 'zc-dmt'); ?></span>
                         </div>
-                        <div class="zc-source-group">
-                            <strong><?php echo esc_html__('Custom Data:', 'zc-dmt'); ?></strong>
-                            <span>Google Sheets, Universal CSV, Universal JSON</span>
+                        <div class="zc-feature">
+                            <span class="dashicons dashicons-admin-users" style="color: #00a32a;"></span>
+                            <strong><?php echo esc_html__('Access Control:', 'zc-dmt'); ?></strong>
+                            <span><?php echo esc_html__('Optional access key validation for shortcodes', 'zc-dmt'); ?></span>
                         </div>
                     </div>
-                    <p>
-                        <a href="<?php echo esc_url(admin_url('admin.php?page=zc-dmt-data-sources')); ?>" class="button">
-                            <?php echo esc_html__('Browse Data Sources', 'zc-dmt'); ?>
-                        </a>
-                    </p>
                 </div>
                 
                 <!-- System Information -->
@@ -461,7 +601,11 @@ if (!class_exists('ZC_DMT_Plugin')) {
                         <tbody>
                             <tr>
                                 <th><?php echo esc_html__('Plugin Version', 'zc-dmt'); ?></th>
-                                <td><code><?php echo esc_html(ZC_DMT_VERSION); ?></code></td>
+                                <td><code><?php echo esc_html(ZC_DMT_VERSION); ?></code> <span style="color: #00a32a;">(Secure)</span></td>
+                            </tr>
+                            <tr>
+                                <th><?php echo esc_html__('Security Mode', 'zc-dmt'); ?></th>
+                                <td><strong><?php echo esc_html(ucfirst(get_option('zc_dmt_security_mode', 'strict'))); ?></strong></td>
                             </tr>
                             <tr>
                                 <th><?php echo esc_html__('Database Schema', 'zc-dmt'); ?></th>
@@ -472,10 +616,8 @@ if (!class_exists('ZC_DMT_Plugin')) {
                                 <td><code><?php echo esc_html(rest_url(ZC_DMT_REST_NS . '/')); ?></code></td>
                             </tr>
                             <tr>
-                                <th><?php echo esc_html__('Data Sources Available', 'zc-dmt'); ?></th>
-                                <td>
-                                    <span style="color: #00a32a; font-weight: 600;">15 sources active</span>
-                                </td>
+                                <th><?php echo esc_html__('Data Sources', 'zc-dmt'); ?></th>
+                                <td><span style="color: #00a32a; font-weight: 600;">15 sources available</span></td>
                             </tr>
                         </tbody>
                     </table>
@@ -483,44 +625,38 @@ if (!class_exists('ZC_DMT_Plugin')) {
             </div>
             
             <style>
-            /* Dashboard specific styles */
-            .zc-sources-summary {
-                margin: 15px 0;
-                padding: 15px;
+            .zc-security-features {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 16px;
+                margin: 16px 0;
+            }
+            
+            .zc-feature {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 12px;
                 background: #f8fafc;
                 border-radius: 4px;
+                border-left: 3px solid #00a32a;
             }
             
-            .zc-source-group {
-                margin-bottom: 8px;
-                display: block;
+            .zc-feature .dashicons {
+                flex-shrink: 0;
             }
             
-            .zc-source-group strong {
+            .zc-feature strong {
                 color: #1d2327;
-                display: inline-block;
-                min-width: 180px;
+                margin-right: 4px;
             }
             
-            .zc-source-group span {
+            .zc-feature span:last-child {
                 color: #646970;
                 font-size: 14px;
             }
             </style>
             <?php
-        }
-
-        // NEW: Placeholder for Charts Shortcode Builder page
-        public function render_charts_page_placeholder() {
-            if (!current_user_can('manage_options')) {
-                wp_die(esc_html__('You do not have sufficient permissions to access this page.', 'zc-dmt'));
-            }
-
-            echo '<div class="wrap">';
-            echo '<h1>' . esc_html__('Charts Shortcode Builder', 'zc-dmt') . '</h1>';
-            echo '<p>' . esc_html__('This page will host the Shortcode Builder for generating static and dynamic chart shortcodes.', 'zc-dmt') . '</p>';
-            echo '<p>' . esc_html__('Next, we will create the UI and logic for this builder here.', 'zc-dmt') . '</p>';
-            echo '</div>';
         }
     }
 }
