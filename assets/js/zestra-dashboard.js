@@ -4,6 +4,8 @@
  * 
  * This file replaces the old chart UI with modern Zestra dashboard design
  * Converted from React/TypeScript to vanilla JavaScript for WordPress compatibility
+ * 
+ * Updated to use secure AJAX endpoints and proper error handling
  */
 
 (function() {
@@ -299,7 +301,7 @@
             });
         }
 
-        // API Methods - Secure data fetching
+        // API Methods - Secure data fetching using correct endpoint names
         async loadIndicator(slug) {
             if (!slug) return;
             
@@ -332,14 +334,14 @@
         }
 
         async fetchIndicatorData(slug) {
-            // Use WordPress AJAX instead of REST API for better security
+            // Use secure WordPress AJAX endpoint
             const formData = new FormData();
-            formData.append('action', 'zc_dmt_get_chart_data');
+            formData.append('action', 'zc_dmt_get_chart_data'); // Updated endpoint name
             formData.append('nonce', window.zcDmtConfig?.nonce || '');
             formData.append('slug', slug);
             formData.append('time_range', this.state.timeRange);
             
-            // Only include access key if provided and needed
+            // Include access key if provided
             if (this.config.accessKey) {
                 formData.append('access_key', this.config.accessKey);
             }
@@ -357,7 +359,11 @@
             const result = await response.json();
             
             if (!result.success) {
-                throw new Error(result.data || 'Failed to fetch data');
+                // Handle specific error cases
+                if (result.data && typeof result.data === 'string') {
+                    throw new Error(result.data);
+                }
+                throw new Error('Failed to fetch data');
             }
             
             return result.data;
@@ -375,6 +381,11 @@
                 formData.append('nonce', window.zcDmtConfig?.nonce || '');
                 formData.append('query', query);
                 
+                // Include access key if provided
+                if (this.config.accessKey) {
+                    formData.append('access_key', this.config.accessKey);
+                }
+                
                 const response = await fetch(window.zcDmtConfig?.ajaxUrl || '/wp-admin/admin-ajax.php', {
                     method: 'POST',
                     body: formData,
@@ -384,12 +395,15 @@
                 const result = await response.json();
                 
                 if (result.success && result.data) {
-                    this.setState({ searchResults: result.data });
+                    // Handle both array format and object format
+                    const searchData = Array.isArray(result.data) ? result.data : (result.data.indicators || []);
+                    this.setState({ searchResults: searchData });
                     this.renderSearchResults();
                 }
                 
             } catch (error) {
                 console.error('Search error:', error);
+                this.setState({ searchResults: [] });
             }
         }
 
@@ -405,6 +419,11 @@
 
             const ctx = canvas.getContext('2d');
             const series = this.state.chartData.series || [];
+            
+            if (series.length === 0) {
+                this.showError('No data points available');
+                return;
+            }
             
             // Prepare data for Chart.js
             const chartData = {
@@ -433,7 +452,15 @@
                         },
                         tooltip: {
                             mode: 'index',
-                            intersect: false
+                            intersect: false,
+                            callbacks: {
+                                title: function(tooltipItems) {
+                                    return new Date(tooltipItems[0].parsed.x).toLocaleDateString();
+                                },
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.parsed.y.toFixed(2);
+                                }
+                            }
                         }
                     },
                     scales: {
@@ -449,12 +476,21 @@
                             },
                             grid: {
                                 color: this.getThemeColor('grid')
+                            },
+                            ticks: {
+                                color: this.getThemeColor('text')
                             }
                         },
                         y: {
                             beginAtZero: false,
                             grid: {
                                 color: this.getThemeColor('grid')
+                            },
+                            ticks: {
+                                color: this.getThemeColor('text'),
+                                callback: function(value) {
+                                    return value.toLocaleString();
+                                }
                             }
                         }
                     },
@@ -466,8 +502,13 @@
                 }
             };
 
-            this.chart = new Chart(ctx, chartConfig);
-            this.hideLoading();
+            try {
+                this.chart = new Chart(ctx, chartConfig);
+                this.hideLoading();
+            } catch (error) {
+                console.error('Chart rendering error:', error);
+                this.showError('Failed to render chart');
+            }
         }
 
         getChartJSType() {
